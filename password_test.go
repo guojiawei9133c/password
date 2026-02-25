@@ -4,26 +4,20 @@ import (
 	"testing"
 )
 
-// TestNew tests creating a Password from a stored hash
-func TestNew(t *testing.T) {
+// TestPasswordType tests creating a Password by direct type conversion
+func TestPasswordType(t *testing.T) {
 	hash := "$argon2id$v=19$m=65536,t=1,p=4$Lr27TtuSl/CAmXzbPLageA$bNemdbSgi3MtyvlnVoU1xnQ4eICpp4ObVprA1gbNDRU"
-	pw := New(hash)
+	pw := Password(hash)
 
-	if pw == nil {
-		t.Fatal("New() returned nil")
-	}
 	if pw.String() != hash {
-		t.Errorf("String() = %q, want %q", pw.String(), hash)
+		t.Errorf("Password = %q, want %q", pw.String(), hash)
 	}
 }
 
-func TestNewEmpty(t *testing.T) {
-	pw := New("")
-	if pw == nil {
-		t.Fatal("New() returned nil for empty hash")
-	}
+func TestPasswordType_Empty(t *testing.T) {
+	pw := Password("")
 	if pw.String() != "" {
-		t.Errorf("String() = %q, want empty", pw.String())
+		t.Errorf("Password = %q, want empty", pw.String())
 	}
 }
 
@@ -33,7 +27,7 @@ func TestVerify(t *testing.T) {
 	hash := Generate("mysecretpassword")
 
 	// Simulate login: create Password with stored hash, verify input
-	pw := New(hash)
+	pw := Password(hash)
 	valid, err := pw.Verify("mysecretpassword")
 
 	if err != nil {
@@ -46,7 +40,7 @@ func TestVerify(t *testing.T) {
 
 func TestVerifyWrongPassword(t *testing.T) {
 	hash := Generate("mysecretpassword")
-	pw := New(hash)
+	pw := Password(hash)
 
 	valid, err := pw.Verify("wrongpassword")
 	if err != nil {
@@ -59,7 +53,7 @@ func TestVerifyWrongPassword(t *testing.T) {
 
 func TestVerifyEmptyInputs(t *testing.T) {
 	hash := Generate("testpassword")
-	pw := New(hash)
+	pw := Password(hash)
 
 	// Empty plaintext password
 	valid, _ := pw.Verify("")
@@ -68,14 +62,14 @@ func TestVerifyEmptyInputs(t *testing.T) {
 	}
 
 	// Empty hash
-	pw2 := New("")
+	pw2 := Password("")
 	valid, _ = pw2.Verify("password")
 	if valid {
 		t.Error("Verify() should return false for empty hash")
 	}
 
 	// Both empty
-	pw3 := New("")
+	pw3 := Password("")
 	valid, _ = pw3.Verify("")
 	if valid {
 		t.Error("Verify() should return false when both inputs are empty")
@@ -90,7 +84,7 @@ func TestVerifyInvalidHash(t *testing.T) {
 	}
 
 	for _, h := range invalidHashes {
-		pw := New(h)
+		pw := Password(h)
 		_, err := pw.Verify("plaintext")
 		if err == nil {
 			t.Errorf("Verify() should return error for invalid hash: %s", h)
@@ -111,7 +105,7 @@ func TestRoundtrip(t *testing.T) {
 		hash := Generate(plaintext)
 
 		// Login: verify
-		pw := New(hash)
+		pw := Password(hash)
 		valid, err := pw.Verify(plaintext)
 		if err != nil {
 			t.Errorf("Verify() error for password %q: %v", plaintext, err)
@@ -125,14 +119,6 @@ func TestRoundtrip(t *testing.T) {
 		if valid {
 			t.Errorf("Verify() incorrectly validated modified password for %q", plaintext)
 		}
-	}
-}
-
-func TestString(t *testing.T) {
-	hash := "$argon2id$v=19$m=65536,t=1,p=4$Lr27TtuSl/CAmXzbPLageA$bNemdbSgi3MtyvlnVoU1xnQ4eICpp4ObVprA1gbNDRU"
-	pw := New(hash)
-	if pw.String() != hash {
-		t.Errorf("String() = %q, want %q", pw.String(), hash)
 	}
 }
 
@@ -157,7 +143,7 @@ func TestGenerate(t *testing.T) {
 	}
 
 	// Each hash should verify correctly
-	pw := New(hash)
+	pw := Password(hash)
 	valid, err := pw.Verify(plaintext)
 	if err != nil || !valid {
 		t.Error("Generated hash should verify correctly")

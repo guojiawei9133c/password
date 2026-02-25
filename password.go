@@ -28,25 +28,16 @@ var (
 // Password represents a stored password hash that can be verified against plaintext input.
 type Password string
 
-// New creates a new Password from a stored hash string.
-func New(hash string) *Password {
-	p := Password(hash)
-	return &p
-}
-
 // String returns the stored hash.
-func (p *Password) String() string {
-	if p == nil {
-		return ""
-	}
-	return string(*p)
+func (p Password) String() string {
+	return string(p)
 }
 
 // Verify checks if the plaintext password matches the stored hash.
 // It returns true if they match, false otherwise.
 // An error is returned if the stored hash format is invalid.
-func (p *Password) Verify(plaintext string) (bool, error) {
-	if p == nil || *p == "" || plaintext == "" {
+func (p Password) Verify(plaintext string) (bool, error) {
+	if p == "" || plaintext == "" {
 		return false, nil
 	}
 
@@ -56,7 +47,7 @@ func (p *Password) Verify(plaintext string) (bool, error) {
 		return false, err
 	}
 
-	// Derive the key from plaintext using the same parameters
+	// Derive the key from the plaintext using the same parameters
 	derivedHash := argon2.IDKey([]byte(plaintext), salt, params.time, params.memory, params.threads, params.keyLen)
 
 	// Constant-time comparison to prevent timing attacks
@@ -68,7 +59,7 @@ func (p *Password) Verify(plaintext string) (bool, error) {
 
 // Generate returns an Argon2id hash of the given plaintext password.
 // This is typically used during user registration.
-// The returned hash should be stored and later used with New(hash).Verify().
+// The returned hash should be stored and later used with Password(hash).Verify().
 func Generate(plaintext string) string {
 	if plaintext == "" {
 		return ""
