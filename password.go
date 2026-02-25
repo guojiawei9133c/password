@@ -26,11 +26,11 @@ var (
 )
 
 // Password represents a stored password hash that can be verified against plaintext input.
-type Password []byte
+type Password string
 
 // New creates a new Password from a stored hash string.
 func New(hash string) *Password {
-	p := Password([]byte(hash))
+	p := Password(hash)
 	return &p
 }
 
@@ -46,7 +46,7 @@ func (p *Password) String() string {
 // It returns true if they match, false otherwise.
 // An error is returned if the stored hash format is invalid.
 func (p *Password) Verify(plaintext string) (bool, error) {
-	if p == nil || len(*p) == 0 || plaintext == "" {
+	if p == nil || *p == "" || plaintext == "" {
 		return false, nil
 	}
 
