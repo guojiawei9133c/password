@@ -1,3 +1,38 @@
+// Package password provides Argon2id password hashing functionality.
+//
+// The package uses Argon2id (RFC 9106) with secure defaults for password hashing
+// and verification. It follows the PHC (Password Hashing Competition) string format.
+//
+// Security features:
+//   - Argon2id algorithm (recommended for password hashing)
+//   - Constant-time comparison to prevent timing attacks
+//   - Random salt generation using crypto/rand
+//
+// Default parameters:
+//   - Memory: 64 MiB (m=65536 in KiB)
+//   - Time cost: 1 pass
+//   - Parallelism: 4 threads
+//   - Salt length: 16 bytes
+//   - Key length: 32 bytes
+//
+// Example:
+//
+//	// Generate hash during registration
+//	hash, err := password.Generate("user_password")
+//	if err != nil {
+//	    // Handle error
+//	}
+//	// Store hash in database
+//
+//	// Verify password during login
+//	pw := password.Password(storedHash)
+//	valid, err := pw.Verify(userInput)
+//	if err != nil {
+//	    // Handle invalid hash format
+//	}
+//	if valid {
+//	    // Password is correct
+//	}
 package password
 
 import (
@@ -21,19 +56,39 @@ const (
 )
 
 var (
-	ErrInvalidHash     = errors.New("invalid hash format")
-	ErrIncompatible    = errors.New("incompatible version of argon2")
+	// ErrInvalidHash is returned when the stored hash format is invalid.
+	ErrInvalidHash = errors.New("invalid hash format")
+
+	// ErrIncompatible is returned when the Argon2 version is not supported.
+	ErrIncompatible = errors.New("incompatible version of argon2")
+
+	// ErrPasswordMismatch is returned when the password does not match the stored hash.
 	ErrPasswordMismatch = errors.New("password mismatch")
-	ErrEmptyPassword  = errors.New("empty password")
-	ErrInvalidParams  = errors.New("invalid parameters")
+
+	// ErrEmptyPassword is returned when attempting to generate a hash from an empty password.
+	ErrEmptyPassword = errors.New("empty password")
+
+	// ErrInvalidParams is returned when hash parameters are invalid (zero, duplicate, etc.).
+	ErrInvalidParams = errors.New("invalid parameters")
 )
 
 // Password represents a stored password hash that can be verified against plaintext input.
+//
+// It wraps a PHC-formatted hash string and provides a Verify method
+// for password validation.
 type Password string
 
 // Verify checks if the plaintext password matches the stored hash.
-// It returns true if they match, false otherwise.
-// An error is returned if the stored hash format is invalid.
+//
+// The method uses constant-time comparison to prevent timing attacks. Even for
+// empty inputs, the full verification path is executed to maintain consistent timing.
+//
+// Parameters:
+//   plaintext - the plaintext password to verify
+//
+// Returns:
+//   bool - true if the password matches, false otherwise
+//   error - ErrInvalidHash, ErrIncompatible, ErrInvalidParams, or ErrPasswordMismatch
 func (p Password) Verify(plaintext string) (bool, error) {
 	// Always parse the hash first to prevent timing attacks on empty/invalid hashes
 	params, salt, hash, err := parseHash(string(p))
@@ -41,7 +96,7 @@ func (p Password) Verify(plaintext string) (bool, error) {
 		return false, err
 	}
 
-	// Always derive the hash, even for empty plaintext, to maintain constant-time behavior
+	// Always derive hash, even for empty plaintext, to maintain constant-time behavior
 	derivedHash := argon2.IDKey([]byte(plaintext), salt, params.time, params.memory, params.threads, params.keyLen)
 
 	// Check empty plaintext AFTER deriving to avoid timing leaks
@@ -59,8 +114,17 @@ func (p Password) Verify(plaintext string) (bool, error) {
 }
 
 // Generate returns an Argon2id hash of the given plaintext password.
-// This is typically used during user registration.
-// The returned hash should be stored and later used with Password(hash).Verify().
+//
+// The returned hash follows the PHC (Password Hashing Competition) format and
+// includes all necessary parameters, salt, and the derived hash. This hash
+// should be stored securely and later used with Password.Verify() for validation.
+//
+// Parameters:
+//   plaintext - the plaintext password to hash
+//
+// Returns:
+//   string - the PHC-formatted hash string
+//   error - ErrEmptyPassword if the password is empty
 func Generate(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", ErrEmptyPassword
@@ -90,6 +154,19 @@ type parameters struct {
 	keyLen  uint32
 }
 
+// parseHash parses a PHC-formatted Argon2id hash string.
+//
+// It validates the format, extracts parameters, salt, and hash, and performs
+// sanity checks on the extracted values.
+//
+// Parameters:
+//   encodedHash - the PHC-formatted hash string
+//
+// Returns:
+//   *parameters - the extracted hash parameters
+//   []byte - the decoded salt
+//   []byte - the decoded hash
+//   error - ErrInvalidHash, ErrIncompatible, ErrInvalidParams, or base64 decoding errors
 func parseHash(encodedHash string) (*parameters, []byte, []byte, error) {
 	parts := strings.Split(encodedHash, "$")
 	// Format: $argon2id$v=19$m=...,t=...,p=...$salt$hash (PHC format)
