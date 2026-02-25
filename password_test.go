@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// TestPasswordType tests the Password type and its methods
+// TestPasswordType_New tests the Password type and its methods
 func TestPasswordType_New(t *testing.T) {
 	pw := New("testpassword")
 	if pw == nil {

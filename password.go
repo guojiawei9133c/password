@@ -26,15 +26,16 @@ var (
 )
 
 // Password represents a plaintext password that can be hashed and verified.
-type Password string
+// The password is stored internally as a byte slice.
+type Password []byte
 
 // New creates a new Password from the given string.
 func New(pw string) *Password {
-	p := Password(pw)
+	p := Password([]byte(pw))
 	return &p
 }
 
-// String returns the plaintext password.
+// String returns the plaintext password as a string.
 // Use with caution - this exposes the plaintext password.
 func (p *Password) String() string {
 	if p == nil {
@@ -46,11 +47,9 @@ func (p *Password) String() string {
 // Hash returns an Argon2id hashed version of the password.
 // Each call produces a different hash due to a random salt.
 func (p *Password) Hash() string {
-	if p == nil || *p == "" {
+	if p == nil || len(*p) == 0 {
 		return ""
 	}
-
-	pw := string(*p)
 
 	// Generate a random salt
 	salt := make([]byte, defaultSaltLength)
@@ -59,7 +58,7 @@ func (p *Password) Hash() string {
 	}
 
 	// Derive the key using Argon2id
-	hash := argon2.IDKey([]byte(pw), salt, defaultTime, defaultMemory, defaultThreads, defaultKeyLength)
+	hash := argon2.IDKey(*p, salt, defaultTime, defaultMemory, defaultThreads, defaultKeyLength)
 
 	// Format: $argon2id$v=19$<base64 salt>$<base64 hash>
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
@@ -73,11 +72,9 @@ func (p *Password) Hash() string {
 // It returns true if they match, false otherwise.
 // An error is returned if the hash format is invalid.
 func (p *Password) Verify(encodedHash string) (bool, error) {
-	if p == nil || *p == "" || encodedHash == "" {
+	if p == nil || len(*p) == 0 || encodedHash == "" {
 		return false, nil
 	}
-
-	pw := string(*p)
 
 	// Parse the hash format
 	params, salt, hash, err := parseHash(encodedHash)
@@ -86,7 +83,7 @@ func (p *Password) Verify(encodedHash string) (bool, error) {
 	}
 
 	// Derive the key using the same parameters
-	derivedHash := argon2.IDKey([]byte(pw), salt, params.time, params.memory, params.threads, params.keyLen)
+	derivedHash := argon2.IDKey(*p, salt, params.time, params.memory, params.threads, params.keyLen)
 
 	// Constant-time comparison to prevent timing attacks
 	if subtle.ConstantTimeCompare(derivedHash, hash) == 1 {
