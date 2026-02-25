@@ -43,7 +43,7 @@ func TestVerifyWrongPassword(t *testing.T) {
 	pw := Password(hash)
 
 	valid, err := pw.Verify("wrongpassword")
-	if err != nil {
+	if err != ErrPasswordMismatch {
 		t.Errorf("Verify() returned error: %v", err)
 	}
 	if valid {

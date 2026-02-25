@@ -23,6 +23,7 @@ const (
 var (
 	ErrInvalidHash  = errors.New("invalid hash format")
 	ErrIncompatible = errors.New("incompatible version of argon2")
+	ErrPasswordMismatch = errors.New("password mismatch")
 )
 
 // Password represents a stored password hash that can be verified against plaintext input.
@@ -41,8 +42,8 @@ func (p Password) Verify(plaintext string) (bool, error) {
 		return false, nil
 	}
 
-	// Parse the stored hash format
-	params, salt, hash, err := parseHash(p.String())
+	// Parse the stored hash format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
+	params, salt, hash, err := parseHash(string(p))
 	if err != nil {
 		return false, err
 	}
@@ -54,7 +55,7 @@ func (p Password) Verify(plaintext string) (bool, error) {
 	if subtle.ConstantTimeCompare(derivedHash, hash) == 1 {
 		return true, nil
 	}
-	return false, nil
+	return false, ErrPasswordMismatch
 }
 
 // Generate returns an Argon2id hash of the given plaintext password.
@@ -100,23 +101,46 @@ func parseHash(encodedHash string) (*parameters, []byte, []byte, error) {
 		return nil, nil, nil, ErrIncompatible
 	}
 
-	var params parameters
-	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &params.memory, &params.time, &params.threads)
-	if err != nil {
+	// Parse parameters manually for better flexibility and readability
+	// Format: m=65536,t=1,p=4 (order-independent)
+	paramStrs := strings.Split(parts[3], ",")
+	var paramsValues parameters
+	for _, param := range paramStrs {
+		switch {
+		case strings.HasPrefix(param, "m="):
+			if _, err := fmt.Sscanf(param, "m=%d", &paramsValues.memory); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to parse memory parameter: %w", err)
+			}
+		case strings.HasPrefix(param, "t="):
+			if _, err := fmt.Sscanf(param, "t=%d", &paramsValues.time); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to parse time cost parameter: %w", err)
+			}
+		case strings.HasPrefix(param, "p="):
+			if _, err := fmt.Sscanf(param, "p=%d", &paramsValues.threads); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to parse threads parameter: %w", err)
+			}
+		}
+	}
+
+	b64Salt := parts[4]
+	b64Hash := parts[5]
+
+	if b64Salt == "" || b64Hash == "" {
 		return nil, nil, nil, ErrInvalidHash
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	// Decode base64 salt and hash
+	salt, err := base64.RawStdEncoding.DecodeString(b64Salt)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("failed to decode salt: %w", err)
 	}
 
-	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	hash, err := base64.RawStdEncoding.DecodeString(b64Hash)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("failed to decode hash: %w", err)
 	}
 
-	params.keyLen = uint32(len(hash))
+	paramsValues.keyLen = uint32(len(hash))
 
-	return &params, salt, hash, nil
+	return &paramsValues, salt, hash, nil
 }
