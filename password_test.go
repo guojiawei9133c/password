@@ -9,15 +9,15 @@ func TestPasswordType(t *testing.T) {
 	hash := "$argon2id$v=19$m=65536,t=1,p=4$Lr27TtuSl/CAmXzbPLageA$bNemdbSgi3MtyvlnVoU1xnQ4eICpp4ObVprA1gbNDRU"
 	pw := Password(hash)
 
-	if pw.String() != hash {
-		t.Errorf("Password = %q, want %q", pw.String(), hash)
+	if string(pw) != hash {
+		t.Errorf("Password = %q, want %q", string(pw), hash)
 	}
 }
 
 func TestPasswordType_Empty(t *testing.T) {
 	pw := Password("")
-	if pw.String() != "" {
-		t.Errorf("Password = %q, want empty", pw.String())
+	if string(pw) != "" {
+		t.Errorf("Password = %q, want empty", string(pw))
 	}
 }
 

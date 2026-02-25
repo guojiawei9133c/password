@@ -29,11 +29,6 @@ var (
 // Password represents a stored password hash that can be verified against plaintext input.
 type Password string
 
-// String returns the stored hash.
-func (p Password) String() string {
-	return string(p)
-}
-
 // Verify checks if the plaintext password matches the stored hash.
 // It returns true if they match, false otherwise.
 // An error is returned if the stored hash format is invalid.
