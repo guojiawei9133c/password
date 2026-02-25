@@ -25,18 +25,16 @@ var (
 	ErrIncompatible = errors.New("incompatible version of argon2")
 )
 
-// Password represents a plaintext password that can be hashed and verified.
-// The password is stored internally as a byte slice.
+// Password represents a stored password hash that can be verified against plaintext input.
 type Password []byte
 
-// New creates a new Password from the given string.
-func New(pw string) *Password {
-	p := Password([]byte(pw))
+// New creates a new Password from a stored hash string.
+func New(hash string) *Password {
+	p := Password([]byte(hash))
 	return &p
 }
 
-// String returns the plaintext password as a string.
-// Use with caution - this exposes the plaintext password.
+// String returns the stored hash.
 func (p *Password) String() string {
 	if p == nil {
 		return ""
@@ -44,10 +42,35 @@ func (p *Password) String() string {
 	return string(*p)
 }
 
-// Hash returns an Argon2id hashed version of the password.
-// Each call produces a different hash due to a random salt.
-func (p *Password) Hash() string {
-	if p == nil || len(*p) == 0 {
+// Verify checks if the plaintext password matches the stored hash.
+// It returns true if they match, false otherwise.
+// An error is returned if the stored hash format is invalid.
+func (p *Password) Verify(plaintext string) (bool, error) {
+	if p == nil || len(*p) == 0 || plaintext == "" {
+		return false, nil
+	}
+
+	// Parse the stored hash format
+	params, salt, hash, err := parseHash(p.String())
+	if err != nil {
+		return false, err
+	}
+
+	// Derive the key from plaintext using the same parameters
+	derivedHash := argon2.IDKey([]byte(plaintext), salt, params.time, params.memory, params.threads, params.keyLen)
+
+	// Constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare(derivedHash, hash) == 1 {
+		return true, nil
+	}
+	return false, nil
+}
+
+// Generate returns an Argon2id hash of the given plaintext password.
+// This is typically used during user registration.
+// The returned hash should be stored and later used with New(hash).Verify().
+func Generate(plaintext string) string {
+	if plaintext == "" {
 		return ""
 	}
 
@@ -58,7 +81,7 @@ func (p *Password) Hash() string {
 	}
 
 	// Derive the key using Argon2id
-	hash := argon2.IDKey(*p, salt, defaultTime, defaultMemory, defaultThreads, defaultKeyLength)
+	hash := argon2.IDKey([]byte(plaintext), salt, defaultTime, defaultMemory, defaultThreads, defaultKeyLength)
 
 	// Format: $argon2id$v=19$<base64 salt>$<base64 hash>
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
@@ -66,44 +89,6 @@ func (p *Password) Hash() string {
 
 	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
 		defaultMemory, defaultTime, defaultThreads, b64Salt, b64Hash)
-}
-
-// Verify checks if the password matches the given hash.
-// It returns true if they match, false otherwise.
-// An error is returned if the hash format is invalid.
-func (p *Password) Verify(encodedHash string) (bool, error) {
-	if p == nil || len(*p) == 0 || encodedHash == "" {
-		return false, nil
-	}
-
-	// Parse the hash format
-	params, salt, hash, err := parseHash(encodedHash)
-	if err != nil {
-		return false, err
-	}
-
-	// Derive the key using the same parameters
-	derivedHash := argon2.IDKey(*p, salt, params.time, params.memory, params.threads, params.keyLen)
-
-	// Constant-time comparison to prevent timing attacks
-	if subtle.ConstantTimeCompare(derivedHash, hash) == 1 {
-		return true, nil
-	}
-	return false, nil
-}
-
-// Generate returns a hashed version of the given password using Argon2id.
-// This is a convenience function equivalent to New(pw).Hash().
-// Deprecated: Use New(pw).Hash() for better type safety.
-func Generate(pw string) string {
-	return New(pw).Hash()
-}
-
-// VerifyHash checks if the given password matches the hash.
-// This is a convenience function equivalent to New(pw).Verify(hash).
-// Deprecated: Use New(pw).Verify(hash) for better type safety.
-func Verify(pw, encodedHash string) (bool, error) {
-	return New(pw).Verify(encodedHash)
 }
 
 type parameters struct {
