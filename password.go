@@ -21,16 +21,36 @@ const (
 )
 
 var (
-	ErrInvalidHash   = errors.New("invalid hash format")
-	ErrIncompatible  = errors.New("incompatible version of argon2")
+	ErrInvalidHash  = errors.New("invalid hash format")
+	ErrIncompatible = errors.New("incompatible version of argon2")
 )
 
-// Generate returns a hashed version of the given password using Argon2id.
-// The returned string contains the encoded parameters, salt, and hash.
-func Generate(pw string) string {
-	if pw == "" {
+// Password represents a plaintext password that can be hashed and verified.
+type Password string
+
+// New creates a new Password from the given string.
+func New(pw string) *Password {
+	p := Password(pw)
+	return &p
+}
+
+// String returns the plaintext password.
+// Use with caution - this exposes the plaintext password.
+func (p *Password) String() string {
+	if p == nil {
 		return ""
 	}
+	return string(*p)
+}
+
+// Hash returns an Argon2id hashed version of the password.
+// Each call produces a different hash due to a random salt.
+func (p *Password) Hash() string {
+	if p == nil || *p == "" {
+		return ""
+	}
+
+	pw := string(*p)
 
 	// Generate a random salt
 	salt := make([]byte, defaultSaltLength)
@@ -49,13 +69,15 @@ func Generate(pw string) string {
 		defaultMemory, defaultTime, defaultThreads, b64Salt, b64Hash)
 }
 
-// Verify checks if the given password matches the hash.
+// Verify checks if the password matches the given hash.
 // It returns true if they match, false otherwise.
 // An error is returned if the hash format is invalid.
-func Verify(pw, encodedHash string) (bool, error) {
-	if pw == "" || encodedHash == "" {
+func (p *Password) Verify(encodedHash string) (bool, error) {
+	if p == nil || *p == "" || encodedHash == "" {
 		return false, nil
 	}
+
+	pw := string(*p)
 
 	// Parse the hash format
 	params, salt, hash, err := parseHash(encodedHash)
@@ -71,6 +93,20 @@ func Verify(pw, encodedHash string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// Generate returns a hashed version of the given password using Argon2id.
+// This is a convenience function equivalent to New(pw).Hash().
+// Deprecated: Use New(pw).Hash() for better type safety.
+func Generate(pw string) string {
+	return New(pw).Hash()
+}
+
+// VerifyHash checks if the given password matches the hash.
+// This is a convenience function equivalent to New(pw).Verify(hash).
+// Deprecated: Use New(pw).Verify(hash) for better type safety.
+func Verify(pw, encodedHash string) (bool, error) {
+	return New(pw).Verify(encodedHash)
 }
 
 type parameters struct {
